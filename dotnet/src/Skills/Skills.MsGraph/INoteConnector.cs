@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,5 +16,5 @@ public interface INoteConnector
     /// <param name="name">Name of the notebook.</param>
     /// <param name="path">Path to the page.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
-    Task<Stream> GetPageContentStreamAsync(string name, string path, CancellationToken cancellationToken = default);
+    Task<string> GetPageContentAsync(string name, string path, CancellationToken cancellationToken = default);
 }
