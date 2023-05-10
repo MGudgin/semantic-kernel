@@ -32,7 +32,7 @@ namespace Microsoft.SemanticKernel.Skills.MsGraph;
 //**********************************************************************************************************************
 
 /// <summary>
-/// Skill for interacting with OneNotes
+/// Skill for interacting with OneNote
 /// </summary>
 public class OneNoteSkill
 {
@@ -81,7 +81,10 @@ public class OneNoteSkill
             return string.Empty;
         }
         
-        return await this._noteConnector.GetPageContentAsync(name, path, context.CancellationToken).ConfigureAwait(false);
+        Stream s = await this._noteConnector.GetPageContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
+
+        using var reader = new StreamReader(s);
+        return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     // /// <summary>
