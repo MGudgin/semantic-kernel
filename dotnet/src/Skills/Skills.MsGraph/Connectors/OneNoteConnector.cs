@@ -30,7 +30,7 @@ public class OneNoteConnector : INoteConnector
     }
 
     /// <inheritdoc/>
-    public async Task<Stream> GetPageContentStreamAsync(string name, string path, CancellationToken cancellationToken = default)
+    public async Task<string> GetPageContentAsync(string name, string path, CancellationToken cancellationToken = default)
     {
         Ensure.NotNullOrWhitespace(name, nameof(name));
         Ensure.NotNullOrWhitespace(path, nameof(path));
@@ -39,9 +39,11 @@ public class OneNoteConnector : INoteConnector
 
         if(pathParts.Length > 3)
         {
+            // TODO: throw proper exception
+            throw new Exception($"Path parts whould be 3 or less");
         }
 
-        IOnenoteNotebooksCollectionPage notebooks = await this._graphServiceClient.Me.Onenote.Notebooks.Request().GetAsync().ConfigureAwait(false);
+        IOnenoteNotebooksCollectionPage notebooks = await this._graphServiceClient.Me.Onenote.Notebooks.Request().GetAsync(cancellationToken).ConfigureAwait(false);
 
         Notebook notebook = notebooks.FirstOrDefault(x => x.DisplayName.Equals(name, StringComparison.CurrentCultureIgnoreCase));
 
@@ -51,8 +53,6 @@ public class OneNoteConnector : INoteConnector
             throw new Exception($"Unable to find notebook {name}");
         }
 
-        
-
         // TODO: Parse the path.
         // Possibilities:
         //
@@ -61,92 +61,7 @@ public class OneNoteConnector : INoteConnector
         // somesectiongroup/somesection/somepage - find the section group(s), then sections(s) then page(s) with these names
         // section groups are nestable, does this matter?
 
-
-    }
-
-    public async Task<Stream> GetFileContentStreamAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        Ensure.NotNullOrWhitespace(filePath, nameof(filePath));
-
-        return await this._graphServiceClient.Me
-            .Drive.Root
-            .ItemWithPath(filePath).Content
-            .Request().GetAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<bool> FileExistsAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        Ensure.NotNullOrWhitespace(filePath, nameof(filePath));
-
-        try
-        {
-            await this._graphServiceClient.Me
-                .Drive.Root
-                .ItemWithPath(filePath).Request().GetAsync(cancellationToken).ConfigureAwait(false);
-
-            // If no exception is thrown, the file exists.
-            return true;
-        }
-        catch (ServiceException ex)
-        {
-            // If the exception is a 404 Not Found, the file does not exist.
-            if (ex.StatusCode == HttpStatusCode.NotFound)
-            {
-                return false;
-            }
-
-            // Otherwise, rethrow the exception.
-            throw;
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task UploadSmallFileAsync(string filePath, string destinationPath, CancellationToken cancellationToken = default)
-    {
-        Ensure.NotNullOrWhitespace(filePath, nameof(filePath));
-        Ensure.NotNullOrWhitespace(destinationPath, nameof(destinationPath));
-
-        filePath = Environment.ExpandEnvironmentVariables(filePath);
-
-        long fileSize = new FileInfo(filePath).Length;
-        if (fileSize > 4 * 1024 * 1024)
-        {
-            throw new IOException("File is too large to upload - function currently only supports files up to 4MB.");
-        }
-
-        using FileStream fileContentStream = new(filePath, FileMode.Open, FileAccess.Read);
-
-        GraphResponse<DriveItem> response = await this._graphServiceClient.Me
-            .Drive.Root
-            .ItemWithPath(destinationPath).Content
-            .Request().PutResponseAsync<DriveItem>(fileContentStream, cancellationToken, HttpCompletionOption.ResponseContentRead).ConfigureAwait(false);
-
-        response.ToHttpResponseMessage().EnsureSuccessStatusCode();
-    }
-
-    /// <inheritdoc/>
-    public async Task<string> CreateShareLinkAsync(string filePath, string type = "view", string scope = "anonymous",
-        CancellationToken cancellationToken = default)
-    {
-        Ensure.NotNullOrWhitespace(filePath, nameof(filePath));
-        Ensure.NotNullOrWhitespace(type, nameof(type));
-        Ensure.NotNullOrWhitespace(scope, nameof(scope));
-
-        GraphResponse<Permission> response = await this._graphServiceClient.Me
-            .Drive.Root
-            .ItemWithPath(filePath)
-            .CreateLink(type, scope)
-            .Request().PostResponseAsync(cancellationToken).ConfigureAwait(false);
-
-        response.ToHttpResponseMessage().EnsureSuccessStatusCode();
-
-        string? result = (await response.GetResponseObjectAsync().ConfigureAwait(false)).Link?.WebUrl;
-        if (string.IsNullOrWhiteSpace(result))
-        {
-            throw new MsGraphConnectorException("Shareable file link was null or whitespace.");
-        }
-
-        return result!;
+        return string.Empty;;
     }
 
 }
