@@ -13,17 +13,11 @@ public class MultiStream : Stream
 
     public MultiStream(IEnumerable<Stream> streams)
     {
-       this._position = 0;
+        this._position = 0;
         this._streams = new Queue<Stream>(streams);
     }
 
-    public override bool CanRead
-    {
-        get
-        {
-            return this._streams.Count == 0 || this._streams.Any(s => s.CanRead);
-        }
-    }
+    public override bool CanRead => this._streams.Count == 0 || this._streams.Any(s => s.CanRead);
 
     public override bool CanSeek => false;
 

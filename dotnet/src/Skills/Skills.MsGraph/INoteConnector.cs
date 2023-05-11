@@ -20,7 +20,7 @@ public interface INoteConnector
     Task<Stream> GetPageContentStreamAsync(string notebookName, string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get the content stream for a section.
+    /// Get a content stream for all pages in a section.
     /// </summary>
     /// <param name="notebookName">Name of the notebook.</param>
     /// <param name="path">Path to the section.</param>
