@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -22,8 +23,9 @@ using DayOfWeek = System.DayOfWeek;
 
 /// <summary>
 /// The static plan below is meant to emulate a plan generated from the following request:
-///   "Summarize the content of cheese.txt and send me an email with the summary and a link to the file.
-///    Then add a reminder to follow-up next week."
+///   "Summarize the content of cheese.txt and, optionally the Cheese section in my OneNote
+///   and send me an email with the summary and a link to the file and the OneNote. Then
+///   add a reminder to follow-up next week.
 /// </summary>
 public sealed class Program
 {
@@ -91,6 +93,7 @@ public sealed class Program
         CloudDriveSkill oneDriveSkill = new(new OneDriveConnector(graphServiceClient), loggerFactory.CreateLogger<CloudDriveSkill>());
         TaskListSkill todoSkill = new(new MicrosoftToDoConnector(graphServiceClient), loggerFactory.CreateLogger<TaskListSkill>());
         EmailSkill outlookSkill = new(new OutlookMailConnector(graphServiceClient), loggerFactory.CreateLogger<EmailSkill>());
+        OneNoteSkill onenoteSkill = new(new OneNoteConnector(graphServiceClient), loggerFactory.CreateLogger<OneNoteSkill>());
 
         // Initialize the Semantic Kernel and and register connections with OpenAI/Azure OpenAI instances.
         IKernel sk = Kernel.Builder.WithLogger(loggerFactory.CreateLogger<IKernel>()).Build();
@@ -98,6 +101,7 @@ public sealed class Program
         var onedrive = sk.ImportSkill(oneDriveSkill, "onedrive");
         var todo = sk.ImportSkill(todoSkill, "todo");
         var outlook = sk.ImportSkill(outlookSkill, "outlook");
+        var onenote = sk.ImportSkill(onenoteSkill, "onenote");
 
         if (configuration.GetSection("AzureOpenAI:ServiceId").Value != null)
         {
@@ -137,14 +141,16 @@ public sealed class Program
             throw new InvalidOperationException("Unable to determine current assembly directory.");
         }
 
-        string skillParentDirectory = Path.GetFullPath(Path.Combine(currentAssemblyDirectory, "../../../../skills"));
+        string skillParentDirectory = Path.GetFullPath(Path.Combine(currentAssemblyDirectory, "../../../../../skills"));
 
         IDictionary<string, ISKFunction> summarizeSkills =
             sk.ImportSemanticSkillFromDirectory(skillParentDirectory, "SummarizeSkill");
 
         //
         // The static plan below is meant to emulate a plan generated from the following request:
-        // "Summarize the content of cheese.txt and send me an email with the summary and a link to the file. Then add a reminder to follow-up next week."
+        // "Summarize the content of cheese.txt and, optionally the Cheese section in my OneNote
+        // and send me an email with the summary and a link to the file and the OneNote. Then
+        // add a reminder to follow-up next week."
         //
         string? pathToFile = configuration["OneDrivePathToFile"];
         if (string.IsNullOrWhiteSpace(pathToFile))
@@ -163,6 +169,28 @@ public sealed class Program
 
         string fileSummary = fileContentResult.Result;
 
+        string? notebookName = configuration["NotebookName"];
+        string? sectionPath = configuration["SectionPath"];
+
+        if (!string.IsNullOrWhiteSpace(notebookName) && !string.IsNullOrWhiteSpace(sectionPath))
+        {
+            ContextVariables variables = new ContextVariables(notebookName);
+            variables.Set("path", sectionPath);
+            SKContext onenoteContentResult = await sk.RunAsync(variables,
+            onenote["GetSectionContentAsync"],
+            summarizeSkills["Summarize"]);
+            if (onenoteContentResult.ErrorOccurred)
+            {
+                throw new InvalidOperationException($"Failed to get OneNote Section content: {onenoteContentResult.LastErrorDescription}");
+            }
+
+            var sb = new StringBuilder(fileSummary);
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.Append(onenoteContentResult.Result);
+            fileSummary = sb.ToString();
+        }
+
         // Get my email address
         SKContext emailAddressResult = await sk.RunAsync(string.Empty, outlook["GetMyEmailAddressAsync"]);
         string myEmailAddress = emailAddressResult.Result;
@@ -171,8 +199,11 @@ public sealed class Program
         SKContext fileLinkResult = await sk.RunAsync(pathToFile, onedrive["CreateLinkAsync"]);
         string fileLink = fileLinkResult.Result;
 
+        // TODO: Create a link to the OneNote Section
+        string oneNoteLink = string.Empty;
+
         // Send me an email with the summary and a link to the file.
-        ContextVariables emailMemory = new($"{fileSummary}{Environment.NewLine}{Environment.NewLine}{fileLink}");
+        ContextVariables emailMemory = new($"{fileSummary}{Environment.NewLine}{Environment.NewLine}{fileLink}{Environment.NewLine}{Environment.NewLine}{oneNoteLink}");
         emailMemory.Set(EmailSkill.Parameters.Recipients, myEmailAddress);
         emailMemory.Set(EmailSkill.Parameters.Subject, $"Summary of {pathToFile}");
 
