@@ -36,6 +36,9 @@ namespace Microsoft.SemanticKernel.Skills.MsGraph;
 /// </summary>
 public class OneNoteSkill
 {
+    const string DefaultLinkType = "view";
+    const string DefaultLinkScope = "anonymous";
+
     /// <summary>
     /// <see cref="ContextVariables"/> parameter names.
     /// </summary>
@@ -47,9 +50,19 @@ public class OneNoteSkill
         public const string Name = "name";
 
         /// <summary>
-        /// Path to content.
+        /// Path to page or section.
         /// </summary>
         public const string Path = "path";
+
+        /// <summary>
+        /// Type of link to create
+        /// </summary>
+        public const string LinkType = "linkType";
+
+        /// <summary>
+        /// Scope of link to create
+        /// </summary>
+        public const string LinkScope = "linkScope";
     }
 
     private readonly INoteConnector _noteConnector;
@@ -80,7 +93,7 @@ public class OneNoteSkill
             context.Fail($"Missing variable {Parameters.Path}.");
             return string.Empty;
         }
-        
+
         Stream s = await this._noteConnector.GetPageContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
@@ -106,5 +119,63 @@ public class OneNoteSkill
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Create a sharable link to a page in a OneNote
+    /// </summary>
+    [SKFunction("Create a sharable link to a page in a OneNote.")]
+    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
+    public async Task<string> CreatePageLinkAsync(string name, SKContext context)
+    {
+        if (!context.Variables.Get(Parameters.Path, out string path))
+        {
+            context.Fail($"Missing variable {Parameters.Path}.");
+            return string.Empty;
+        }
+
+        this._logger.LogDebug("Creating link for page at '{0}' in notebook '{1}'", path, name);
+
+        if (!context.Variables.Get(Parameters.LinkType, out string linkType))
+        {
+            linkType = DefaultLinkType;
+        }
+
+        if (!context.Variables.Get(Parameters.LinkScope, out string linkScope))
+        {
+            linkScope = DefaultLinkScope;
+        }
+
+        return await this._noteConnector.CreatePageShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Create a sharable link to a page in a OneNote
+    /// </summary>
+    [SKFunction("Create a sharable link to a section in a OneNote.")]
+    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section")]
+    public async Task<string> CreateSectionLinkAsync(string name, SKContext context)
+    {
+        if (!context.Variables.Get(Parameters.Path, out string path))
+        {
+            context.Fail($"Missing variable {Parameters.Path}.");
+            return string.Empty;
+        }
+
+        this._logger.LogDebug("Creating link for section at '{0}' in notebook '{1}'", path, name);
+
+        if (!context.Variables.Get(Parameters.LinkType, out string linkType))
+        {
+            linkType = DefaultLinkType;
+        }
+
+        if (!context.Variables.Get(Parameters.LinkScope, out string linkScope))
+        {
+            linkScope = DefaultLinkScope;
+        }
+
+        return await this._noteConnector.CreatePageShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
     }
 }

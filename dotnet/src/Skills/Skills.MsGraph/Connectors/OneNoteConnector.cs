@@ -33,55 +33,43 @@ public class OneNoteConnector : INoteConnector
     {
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
-
-        string[] pathParts = GetPathParts(path);
-
-        if (pathParts.Length < 2)
-        {
-            // TODO: throw proper exception
-            throw new ArgumentException($"Path should have 2 or more parts, was {pathParts.Length}");
-        }
-
-        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
-
-        // Trim name from path to get path to section
-        //           1         2         3         
-        // 0123456789012345678901234567890123456789
-        // /SG1/SG2/SectionName/PageTitle
-        string sectionPath = path.Substring(0, path.LastIndexOf('/'));
-        OnenoteSection section = await this.GetSectionAsync(notebook.Id, sectionPath, cancellationToken).ConfigureAwait(false);
-
-        string pageName = pathParts[pathParts.Length - 1];
-        IOnenoteSectionPagesCollectionPage pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
-        OnenotePage page = pages.FirstOrDefault(x => x.Title.Equals(pageName, StringComparison.OrdinalIgnoreCase));
-
-        if (page == null)
-        {
-            // TODO: throw proper exception
-            throw new ArgumentException($"Unable to find page {pageName} for notebook {notebookName} with path {path}");
-        }
-
-        return page.Content;
+        OnenotePage page = await GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+        return await this.GetPageStreamAsync(page, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     public async Task<Stream> GetSectionContentStreamAsync(string notebookName, string path, CancellationToken cancellationToken = default)
     {
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
-
-        string[] pathParts = GetPathParts(path);
-
-        if (pathParts.Length < 1)
-        {
-            // TODO: throw proper exception
-            throw new ArgumentException($"Path should have 1 or more parts, was {pathParts.Length}");
-        }
-
-        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
-        OnenoteSection section = await this.GetSectionAsync(notebook.Id, path, cancellationToken).ConfigureAwait(false);
+        OnenoteSection section = await GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
         IEnumerable<OnenotePage> pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
         IEnumerable<Stream> streams = await this.GetPageStreamsAsync(pages, cancellationToken).ConfigureAwait(false);
         return new MultiStream(streams);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> CreatePageShareLinkAsync(string notebookName, string path, string type = "view", string scope = "anonymous", CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
+        Ensure.NotNullOrWhitespace(path, nameof(path));
+
+        OnenotePage page = await GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+
+        // TODO: Honour type and scope
+        return page.Links.OneNoteWebUrl.Href;
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> CreateSectionShareLinkAsync(string notebookName, string path, string type = "view", string scope = "anonymous", CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
+        Ensure.NotNullOrWhitespace(path, nameof(path));
+
+        OnenoteSection section = await GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+
+        // TODO: Honour type and scope
+        return section.Links.OneNoteWebUrl.Href;
     }
 
     private async Task<IEnumerable<Stream>> GetPageStreamsAsync(IEnumerable<OnenotePage> pages, CancellationToken cancellationToken)
@@ -90,17 +78,21 @@ public class OneNoteConnector : INoteConnector
 
         foreach (OnenotePage page in pages)
         {
-            Stream s = await this._graphServiceClient.Me.Onenote.Pages[page.Id].Content.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+            Stream s = await GetPageStreamAsync(page, cancellationToken).ConfigureAwait(false);
             streams.Add(s);
         }
 
         return streams;
     }
 
+    private Task<Stream> GetPageStreamAsync(OnenotePage page, CancellationToken cancellationToken)
+    {
+        return this._graphServiceClient.Me.Onenote.Pages[page.Id].Content.Request().GetAsync(cancellationToken);
+    }
+
     private async Task<Notebook> GetNotebookAsync(string notebookName, CancellationToken cancellationToken)
     {
         IOnenoteNotebooksCollectionPage notebooks = await this._graphServiceClient.Me.Onenote.Notebooks.Request().GetAsync(cancellationToken).ConfigureAwait(false);
-
         Notebook notebook = notebooks.FirstOrDefault(x => x.DisplayName.Equals(notebookName, StringComparison.OrdinalIgnoreCase));
 
         if (notebook == null)
@@ -112,10 +104,45 @@ public class OneNoteConnector : INoteConnector
         return notebook;
     }
 
+    private async Task<OnenotePage> GetNotebookPageAsync(string notebookName, string path, CancellationToken cancellationToken)
+    {
+        VerifyPagePath(path);
+
+        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
+
+        string sectionPath = GetSectionPath(path);
+        OnenoteSection section = await this.GetSectionAsync(notebook.Id, sectionPath, cancellationToken).ConfigureAwait(false);
+
+        string pageName = GetPageName(path);
+        return await this.GetSectionPageAsync(section.Id, pageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<OnenotePage> GetSectionPageAsync(string sectionId, string pageName, CancellationToken cancellationToken)
+    {
+        IOnenoteSectionPagesCollectionPage pages = await this._graphServiceClient.Me.Onenote.Sections[sectionId].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+        OnenotePage page = pages.FirstOrDefault(x => x.Title.Equals(pageName, StringComparison.OrdinalIgnoreCase));
+
+        if (page == null)
+        {
+            // TODO: throw proper exception
+            throw new ArgumentException($"Unable to find page {pageName}");
+        }
+
+        return page;
+    }
+
+    private async Task<OnenoteSection> GetNotebookSectionAsync(string notebookName, string path, CancellationToken cancellationToken)
+    {
+        VerifySectionPath(path);
+
+        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
+        return await this.GetSectionAsync(notebook.Id, path, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<OnenoteSection> GetSectionAsync(string notebookId, string path, CancellationToken cancellationToken)
     {
-        string[] pathParts = GetPathParts(path);
-        string sectionName = pathParts[pathParts.Length - 1];
+        string[] pathParts = path.Split('/');
+        string sectionName = GetSectionName(path);
         OnenoteSection? section = null;
 
         if (pathParts.Length > 1)
@@ -164,8 +191,42 @@ public class OneNoteConnector : INoteConnector
         return section;
     }
 
-    private static string[] GetPathParts(string path)
+    private static string GetPageName(string path)
     {
-        return path.Split('/');
+        return path.Substring(path.LastIndexOf('/') + 1);
+    }
+
+    private static string GetSectionName(string path)
+    {
+        return path.Substring(path.LastIndexOf('/') + 1);
+    }
+
+    private static string GetSectionPath(string path)
+    {
+        // Trim page from path to get path to section
+        return path.Substring(0, path.LastIndexOf('/'));
+    }
+
+    private static string[] VerifyPagePath(string path)
+    {
+        return VerifyPath(path, 2);
+    }
+
+    private static string[] VerifySectionPath(string path)
+    {
+        return VerifyPath(path, 1);
+    }
+
+    private static string[] VerifyPath(string path, int minExpectedParts)
+    {
+        string[] pathParts = path.Split('/');
+
+        if (pathParts.Length < minExpectedParts)
+        {
+            // TODO: throw proper exception
+            throw new ArgumentException($"Path should have {minExpectedParts} or more parts, was {pathParts.Length}");
+        }
+
+        return pathParts;
     }
 }
