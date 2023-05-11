@@ -67,12 +67,12 @@ public class OneNoteSkill
     }
 
     /// <summary>
-    /// Read all text from a OneNote, using <see cref="ContextVariables.Input"/> as the name.
+    /// Read all text from a OneNote page, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Read text from a OneNote")]
+    [SKFunction("Read text from a OneNote page")]
     [SKFunctionInput(Description = "Name of the OneNote to read")]
-    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section group, section or page")]
-    public async Task<string> ReadTextAsync(string name, SKContext context)
+    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
+    public async Task<string> GetPageContentAsync(string name, SKContext context)
     {
         this._logger.LogInformation("Reading text from {0} OneNote", name);
         if (!context.Variables.Get(Parameters.Path, out string path))
@@ -82,6 +82,27 @@ public class OneNoteSkill
         }
         
         Stream s = await this._noteConnector.GetPageContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
+
+        using var reader = new StreamReader(s);
+        return await reader.ReadToEndAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Read all text from all pages in a OneNote section, using <see cref="ContextVariables.Input"/> as the name of the notebook
+    /// </summary>
+    [SKFunction("Read text from all pages in a OneNote section")]
+    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section")]
+    public async Task<string> GetSectionContentAsync(string name, SKContext context)
+    {
+        this._logger.LogInformation("Reading text from {0} OneNote", name);
+        if (!context.Variables.Get(Parameters.Path, out string path))
+        {
+            context.Fail($"Missing variable {Parameters.Path}.");
+            return string.Empty;
+        }
+
+        Stream s = await this._noteConnector.GetSectionContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);

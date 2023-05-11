@@ -35,7 +35,7 @@ public class OneNoteSkillTests : IDisposable
         string pageContent = "Some text content";
 
         Stream s = new MemoryStream();
-        var writer = new StreamWriter(s, Encoding.UTF8);
+        using var writer = new StreamWriter(s, Encoding.UTF8);
         await writer.WriteAsync(pageContent);
         await writer.FlushAsync();
         s.Seek(0, SeekOrigin.Begin);
@@ -46,7 +46,7 @@ public class OneNoteSkillTests : IDisposable
 
         // Act
         this._context.Variables.Set("path", "Journal/2022/2022-05/2022-05-05");
-        string actual = await target.ReadTextAsync(notebookName, this._context);
+        string actual = await target.GetPageContentAsync(notebookName, this._context);
 
         // Assert
         Assert.Equal(pageContent, actual);

@@ -1,16 +1,14 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.SemanticKernel.Skills.MsGraph.Connectors.Diagnostics;
-using Microsoft.SemanticKernel.Skills.MsGraph.Connectors.Exceptions;
-using static System.Collections.Specialized.BitVector32;
+using Microsoft.SemanticKernel.Skills.MsGraph.Connectors.Utilities;
 
 namespace Microsoft.SemanticKernel.Skills.MsGraph.Connectors;
 
@@ -36,7 +34,7 @@ public class OneNoteConnector : INoteConnector
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
 
-        string[] pathParts = path.Split('/');
+        string[] pathParts = GetPathParts(path);
 
         if (pathParts.Length < 2)
         {
@@ -44,6 +42,63 @@ public class OneNoteConnector : INoteConnector
             throw new ArgumentException($"Path should have 2 or more parts, was {pathParts.Length}");
         }
 
+        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
+
+        // Trim name from path to get path to section
+        //           1         2         3         
+        // 0123456789012345678901234567890123456789
+        // /SG1/SG2/SectionName/PageTitle
+        string sectionPath = path.Substring(0, path.LastIndexOf('/'));
+        OnenoteSection section = await this.GetSectionAsync(notebook.Id, sectionPath, cancellationToken).ConfigureAwait(false);
+
+        string pageName = pathParts[pathParts.Length - 1];
+        IOnenoteSectionPagesCollectionPage pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+        OnenotePage page = pages.FirstOrDefault(x => x.Title.Equals(pageName, StringComparison.OrdinalIgnoreCase));
+
+        if (page == null)
+        {
+            // TODO: throw proper exception
+            throw new ArgumentException($"Unable to find page {pageName} for notebook {notebookName} with path {path}");
+        }
+
+        return page.Content;
+    }
+
+    public async Task<Stream> GetSectionContentStreamAsync(string notebookName, string path, CancellationToken cancellationToken = default)
+    {
+        Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
+        Ensure.NotNullOrWhitespace(path, nameof(path));
+
+        string[] pathParts = path.Split('/');
+
+        if (pathParts.Length < 1)
+        {
+            // TODO: throw proper exception
+            throw new ArgumentException($"Path should have 1 or more parts, was {pathParts.Length}");
+        }
+
+        Notebook notebook = await this.GetNotebookAsync(notebookName, cancellationToken).ConfigureAwait(false);
+        OnenoteSection section = await this.GetSectionAsync(notebook.Id, path, cancellationToken).ConfigureAwait(false);
+        IEnumerable<OnenotePage> pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+        IEnumerable<Stream> streams = await this.GetPageStreamsAsync(pages, cancellationToken).ConfigureAwait(false);
+        return new MultiStream(streams);
+    }
+
+    private async Task<IEnumerable<Stream>> GetPageStreamsAsync(IEnumerable<OnenotePage> pages, CancellationToken cancellationToken)
+    {
+        IList<Stream> streams = new List<Stream>();
+
+        foreach (OnenotePage page in pages)
+        {
+            Stream s = await this._graphServiceClient.Me.Onenote.Pages[page.Id].Content.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+            streams.Add(s);
+        }
+
+        return streams;
+    }
+
+    private async Task<Notebook> GetNotebookAsync(string notebookName, CancellationToken cancellationToken)
+    {
         IOnenoteNotebooksCollectionPage notebooks = await this._graphServiceClient.Me.Onenote.Notebooks.Request().GetAsync(cancellationToken).ConfigureAwait(false);
 
         Notebook notebook = notebooks.FirstOrDefault(x => x.DisplayName.Equals(notebookName, StringComparison.OrdinalIgnoreCase));
@@ -54,43 +109,40 @@ public class OneNoteConnector : INoteConnector
             throw new ArgumentException($"Unable to find notebook {notebookName}");
         }
 
-        // Path possibilities:
-        //
-        // somepage - find the page(s) with this name
-        // somesection/somepage - find the section(s) then page(s) with these names
-        // somesectiongroup/somesection/somepage - find the section group(s), then sections(s) then page(s) with these names
-        // section groups are nestable, does this matter?
+        return notebook;
+    }
+
+    private async Task<OnenoteSection> GetSectionAsync(string notebookId, string path, CancellationToken cancellationToken)
+    {
+        string[] pathParts = GetPathParts(path);
+        string sectionName = pathParts[pathParts.Length - 1];
         OnenoteSection? section = null;
-        SectionGroup? sectionGroup = null;
 
-        string sectionName = pathParts[pathParts.Length - 2];
-        string pageName = pathParts[pathParts.Length - 1];
-
-        if (pathParts.Length > 2)
+        if (pathParts.Length > 1)
         {
-            int numNestedSectionGroups = pathParts.Length - 3;
-
-            INotebookSectionGroupsCollectionPage noteBookSectionGroups = await this._graphServiceClient.Me.Onenote.Notebooks[notebook.Id].SectionGroups.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+            int numNestedSectionGroups = pathParts.Length - 2;
             string notebookSectionGroupName = pathParts[0];
-            sectionGroup = noteBookSectionGroups.FirstOrDefault(x => x.DisplayName.Equals(notebookSectionGroupName, StringComparison.OrdinalIgnoreCase));
+
+            INotebookSectionGroupsCollectionPage noteBookSectionGroups = await this._graphServiceClient.Me.Onenote.Notebooks[notebookId].SectionGroups.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+            SectionGroup? sectionGroup = noteBookSectionGroups.FirstOrDefault(x => x.DisplayName.Equals(notebookSectionGroupName, StringComparison.OrdinalIgnoreCase));
 
             if (sectionGroup == null)
             {
                 // TODO: throw proper exception
-                throw new ArgumentException($"Unable to find section group {notebookSectionGroupName} for notebook {notebookName} with path {path}");
+                throw new ArgumentException($"Unable to find section group {notebookSectionGroupName} with path {path}");
             }
 
             for (int i = 0; i < numNestedSectionGroups; i++)
             {
-                ISectionGroupSectionGroupsCollectionPage sectionGroupsectionGroups = await this._graphServiceClient.Me.Onenote.SectionGroups[sectionGroup.Id].SectionGroups.Request().GetAsync(cancellationToken).ConfigureAwait(false);
                 string sectionGroupName = pathParts[i + 1];
 
+                ISectionGroupSectionGroupsCollectionPage sectionGroupsectionGroups = await this._graphServiceClient.Me.Onenote.SectionGroups[sectionGroup.Id].SectionGroups.Request().GetAsync(cancellationToken).ConfigureAwait(false);
                 sectionGroup = sectionGroupsectionGroups.FirstOrDefault(x => x.DisplayName.Equals(sectionGroupName, StringComparison.OrdinalIgnoreCase));
 
                 if (sectionGroup == null)
                 {
                     // TODO: throw proper exception
-                    throw new ArgumentException($"Unable to find section group {sectionGroupName} for notebook {notebookName} with path {path}");
+                    throw new ArgumentException($"Unable to find section group {sectionGroupName} with path {path}");
                 }
             }
 
@@ -99,26 +151,21 @@ public class OneNoteConnector : INoteConnector
         }
         else
         {
-            INotebookSectionsCollectionPage sections = await this._graphServiceClient.Me.Onenote.Notebooks[notebook.Id].Sections.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+            INotebookSectionsCollectionPage sections = await this._graphServiceClient.Me.Onenote.Notebooks[notebookId].Sections.Request().GetAsync(cancellationToken).ConfigureAwait(false);
             section = sections.FirstOrDefault(x => x.DisplayName.Equals(sectionName, StringComparison.OrdinalIgnoreCase));
         }
 
         if (section == null)
         {
             // TODO: throw proper exception
-            throw new ArgumentException($"Unable to find section {sectionName} for notebook {notebookName} with path {path}");
+            throw new ArgumentException($"Unable to find section {sectionName} with path {path}");
         }
 
-        IOnenoteSectionPagesCollectionPage pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
+        return section;
+    }
 
-        OnenotePage page = pages.FirstOrDefault(x => x.Title.Equals(pageName, StringComparison.OrdinalIgnoreCase));
-
-        if (page == null)
-        {
-            // TODO: throw proper exception
-            throw new ArgumentException($"Unable to find page {pageName} for notebook {notebookName} with path {path}");
-        }
-
-        return page.Content;
+    private static string[] GetPathParts(string path)
+    {
+        return path.Split('/');
     }
 }
