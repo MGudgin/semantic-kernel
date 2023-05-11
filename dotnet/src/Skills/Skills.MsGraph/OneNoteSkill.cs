@@ -107,36 +107,4 @@ public class OneNoteSkill
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
-
-    // /// <summary>
-    // /// Add the text in <see cref="ContextVariables.Input"/> to a OneNote page. If the page doesn't exist, it will be created.
-    // /// </summary>
-    // [SKFunction("Add text to a OneNote page. If the page doesn't exist, it will be created.")]
-    // [SKFunctionInput(Description = "Text to add")]
-    // [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to destination page")]
-    // public async Task AppendTextAsync(string text, SKContext context)
-    // {
-    //     if (!context.Variables.Get(Parameters.Path, out string path))
-    //     {
-    //         context.Fail($"Missing variable {Parameters.Path}.");
-    //         return;
-    //     }
-
-    //     // If the page already exists, open it. If not, create it.
-    //     if (await this._fileSystemConnector.FileExistsAsync(filePath).ConfigureAwait(false))
-    //     {
-    //         this._logger.LogInformation("Writing text to file {0}", filePath);
-    //         using Stream stream = await this._fileSystemConnector.GetWriteableFileStreamAsync(filePath, context.CancellationToken).ConfigureAwait(false);
-    //         this._documentConnector.AppendText(stream, text);
-    //     }
-    //     else
-    //     {
-    //         this._logger.LogInformation("File does not exist. Creating file at {0}", filePath);
-    //         using Stream stream = await this._fileSystemConnector.CreateFileAsync(filePath).ConfigureAwait(false);
-    //         this._documentConnector.Initialize(stream);
-
-    //         this._logger.LogInformation("Writing text to {0}", filePath);
-    //         this._documentConnector.AppendText(stream, text);
-    //     }
-    // }
 }

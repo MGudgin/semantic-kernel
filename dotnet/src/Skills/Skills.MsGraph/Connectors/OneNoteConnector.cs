@@ -69,7 +69,7 @@ public class OneNoteConnector : INoteConnector
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
 
-        string[] pathParts = path.Split('/');
+        string[] pathParts = GetPathParts(path);
 
         if (pathParts.Length < 1)
         {
