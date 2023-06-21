@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.ComponentModel;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,8 +17,8 @@ namespace Microsoft.SemanticKernel.Skills.MsGraph;
 /// </summary>
 public class NoteSkill
 {
-    const string DefaultLinkType = "view";
-    const string DefaultLinkScope = "anonymous";
+    private const string DefaultLinkType = "view"; // TODO expose this as an SK variable
+    private const string DefaultLinkScope = "anonymous"; // TODO expose this as an SK variable
 
     /// <summary>
     /// <see cref="ContextVariables"/> parameter names.
@@ -59,42 +61,34 @@ public class NoteSkill
     }
 
     /// <summary>
-    /// Read all text from a page in a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
+    /// Read text from a page in a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Read text from a notebook page")]
-    [SKFunctionInput(Description = "Name of the notebook to read")]
-    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
-    public async Task<string> GetPageContentAsync(string notebookName, SKContext context)
+    [SKFunction, Description("Read text from a page in a notebook.")]
+    public async Task<string> GetPageContentAsync(
+        [Description("Notebook name"), SKName("input")] string name,
+        [Description("Path to page")] string path,
+        CancellationToken cancellationToken = default)
     {
-        this._logger.LogInformation("Reading text from {0} OneNote", notebookName);
-        if (!context.Variables.Get(Parameters.Path, out string path))
-        {
-            context.Fail($"Missing variable {Parameters.Path}.");
-            return string.Empty;
-        }
+        this._logger.LogInformation("Reading text from {0} OneNote", name);
 
-        Stream s = await this._noteConnector.GetPageContentStreamAsync(notebookName, path, context.CancellationToken).ConfigureAwait(false);
+        Stream s = await this._noteConnector.GetPageContentStreamAsync(name, path, cancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Read all text from all pages in a notebook section, using <see cref="ContextVariables.Input"/> as the name of the notebook
+    /// Read all text from all pages in a section of a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Read text from all pages in a section of a notebook")]
-    [SKFunctionInput(Description = "Name of the notebook to read")]
-    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section")]
-    public async Task<string> GetSectionContentAsync(string notebookName, SKContext context)
+    [SKFunction, Description("Read text from all pages in a section of a notebook.")]
+    public async Task<string> GetSectionContentAsync(
+        [Description("Notebook name"), SKName("input")] string name,
+        [Description("Path to section")] string path,
+        CancellationToken cancellationToken = default)
     {
-        this._logger.LogInformation("Reading text from {0} OneNote", notebookName);
-        if (!context.Variables.Get(Parameters.Path, out string path))
-        {
-            context.Fail($"Missing variable {Parameters.Path}.");
-            return string.Empty;
-        }
+        this._logger.LogInformation("Reading text from {0} OneNote", name);
 
-        Stream s = await this._noteConnector.GetSectionContentStreamAsync(notebookName, path, context.CancellationToken).ConfigureAwait(false);
+        Stream s = await this._noteConnector.GetSectionContentStreamAsync(name, path, cancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
@@ -103,58 +97,28 @@ public class NoteSkill
     /// <summary>
     /// Create a sharable link to a page in a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Create a sharable link to a page in a notebook.")]
-    [SKFunctionInput(Description = "Name of the notebook to create the link for")]
-    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
-    public async Task<string> CreatePageLinkAsync(string name, SKContext context)
+    [SKFunction, Description("Create a sharable link to a page in a notebook.")]
+    public async Task<string> CreatePageLinkAsync(
+        [Description("Notebook name"), SKName("input")] string name,
+        [Description("Path to page")] string path,
+        CancellationToken cancellationToken = default)
     {
-        if (!context.Variables.Get(Parameters.Path, out string path))
-        {
-            context.Fail($"Missing variable {Parameters.Path}.");
-            return string.Empty;
-        }
-
         this._logger.LogDebug("Creating link for page at '{0}' in notebook '{1}'", path, name);
 
-        if (!context.Variables.Get(Parameters.LinkType, out string linkType))
-        {
-            linkType = DefaultLinkType;
-        }
-
-        if (!context.Variables.Get(Parameters.LinkScope, out string linkScope))
-        {
-            linkScope = DefaultLinkScope;
-        }
-
-        return await this._noteConnector.CreatePageShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
+        return await this._noteConnector.CreatePageShareLinkAsync(name, path, DefaultLinkType, DefaultLinkScope, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Create a sharable link to a page in a OneNote
     /// </summary>
-    [SKFunction("Create a sharable link to a section in a OneNote.")]
-    [SKFunctionInput(Description = "Name of the OneNote to read")]
-    [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section")]
-    public async Task<string> CreateSectionLinkAsync(string name, SKContext context)
+    [SKFunction, Description("Create a sharable link to a section in a notebook.")]
+    public async Task<string> CreateSectionLinkAsync(
+        [Description("Notebook name"), SKName("input")] string name,
+        [Description("Path to section")] string path,
+        CancellationToken cancellationToken = default)
     {
-        if (!context.Variables.Get(Parameters.Path, out string path))
-        {
-            context.Fail($"Missing variable {Parameters.Path}.");
-            return string.Empty;
-        }
-
         this._logger.LogDebug("Creating link for section at '{0}' in notebook '{1}'", path, name);
 
-        if (!context.Variables.Get(Parameters.LinkType, out string linkType))
-        {
-            linkType = DefaultLinkType;
-        }
-
-        if (!context.Variables.Get(Parameters.LinkScope, out string linkScope))
-        {
-            linkScope = DefaultLinkScope;
-        }
-
-        return await this._noteConnector.CreateSectionShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
+        return await this._noteConnector.CreateSectionShareLinkAsync(name, path, DefaultLinkType, DefaultLinkScope, cancellationToken).ConfigureAwait(false);
     }
 }

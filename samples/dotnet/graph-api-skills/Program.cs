@@ -181,26 +181,26 @@ public sealed class Program
 
         if (!string.IsNullOrWhiteSpace(notebookName) && !string.IsNullOrWhiteSpace(sectionPath))
         {
-            ContextVariables notebookVariables = new ContextVariables(notebookName);
+            ContextVariables notebookVariables = new(notebookName);
             notebookVariables.Set("path", sectionPath);
             SKContext onenoteContentResult = await sk.RunAsync(notebookVariables,
-            onenote["GetSectionContentAsync"],
-            summarizeSkills["Summarize"]);
+                onenote["GetSectionContentAsync"],
+                summarizeSkills["Summarize"]);
             if (onenoteContentResult.ErrorOccurred)
             {
                 throw new InvalidOperationException($"Failed to get OneNote Section content: {onenoteContentResult.LastErrorDescription}");
             }
 
-            var sb = new StringBuilder(fileSummary); 
+            var sb = new StringBuilder(fileSummary);
             sb.AppendLine();
             sb.Append(onenoteContentResult.Result);
             fileSummary = sb.ToString();
 
             //// Create a link to the OneNote Section
-            //notebookVariables = new ContextVariables(notebookName);
-            //notebookVariables.Set("path", sectionPath);
-            //SKContext oneNoteLinkResult = await sk.RunAsync(notebookVariables, onenote["CreateSectionLinkAsync"]);
-            //oneNoteLink = oneNoteLinkResult.Result;
+            notebookVariables = new ContextVariables(notebookName);
+            notebookVariables.Set("path", sectionPath);
+            SKContext oneNoteLinkResult = await sk.RunAsync(notebookVariables, onenote["CreateSectionLinkAsync"]);
+            oneNoteLink = oneNoteLinkResult.Result;
         }
 
         // Get my email address

@@ -66,7 +66,7 @@ public class OneNoteConnector : INoteConnector
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
 
-        OnenoteSection section = await GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+        OnenoteSection section = await this.GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
 
         // TODO: Honour type and scope
         return section.Links.OneNoteWebUrl.Href;
@@ -74,11 +74,11 @@ public class OneNoteConnector : INoteConnector
 
     private async Task<IEnumerable<Stream>> GetPageStreamsAsync(IEnumerable<OnenotePage> pages, CancellationToken cancellationToken)
     {
-        IList<Stream> streams = new List<Stream>();
+        List<Stream> streams = new();
 
         foreach (OnenotePage page in pages)
         {
-            Stream s = await GetPageStreamAsync(page, cancellationToken).ConfigureAwait(false);
+            Stream s = await this.GetPageStreamAsync(page, cancellationToken).ConfigureAwait(false);
             streams.Add(s);
         }
 

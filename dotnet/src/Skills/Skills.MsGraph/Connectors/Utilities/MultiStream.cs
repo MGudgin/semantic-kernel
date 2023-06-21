@@ -100,8 +100,8 @@ public class MultiStream : Stream
             {
                 this._streams.Dequeue().Dispose();
             }
-
         }
+
         base.Dispose(disposing);
     }
 }
