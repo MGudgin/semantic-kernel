@@ -33,7 +33,7 @@ public class OneNoteConnector : INoteConnector
     {
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
-        OnenotePage page = await GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+        OnenotePage page = await this.GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
         return await this.GetPageStreamAsync(page, cancellationToken).ConfigureAwait(false);
     }
 
@@ -42,7 +42,7 @@ public class OneNoteConnector : INoteConnector
     {
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
-        OnenoteSection section = await GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+        OnenoteSection section = await this.GetNotebookSectionAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
         IEnumerable<OnenotePage> pages = await this._graphServiceClient.Me.Onenote.Sections[section.Id].Pages.Request().GetAsync(cancellationToken).ConfigureAwait(false);
         IEnumerable<Stream> streams = await this.GetPageStreamsAsync(pages, cancellationToken).ConfigureAwait(false);
         return new MultiStream(streams);
@@ -54,7 +54,7 @@ public class OneNoteConnector : INoteConnector
         Ensure.NotNullOrWhitespace(notebookName, nameof(notebookName));
         Ensure.NotNullOrWhitespace(path, nameof(path));
 
-        OnenotePage page = await GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
+        OnenotePage page = await this.GetNotebookPageAsync(notebookName, path, cancellationToken).ConfigureAwait(false);
 
         // TODO: Honour type and scope
         return page.Links.OneNoteWebUrl.Href;

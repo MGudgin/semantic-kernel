@@ -176,12 +176,13 @@ public sealed class Program
 
         string? notebookName = configuration["NotebookName"];
         string? sectionPath = configuration["SectionPath"];
+        string oneNoteLink = string.Empty;
 
         if (!string.IsNullOrWhiteSpace(notebookName) && !string.IsNullOrWhiteSpace(sectionPath))
         {
-            ContextVariables variables = new ContextVariables(notebookName);
-            variables.Set("path", sectionPath);
-            SKContext onenoteContentResult = await sk.RunAsync(variables,
+            ContextVariables notebookVariables = new ContextVariables(notebookName);
+            notebookVariables.Set("path", sectionPath);
+            SKContext onenoteContentResult = await sk.RunAsync(notebookVariables,
             onenote["GetSectionContentAsync"],
             summarizeSkills["Summarize"]);
             if (onenoteContentResult.ErrorOccurred)
@@ -189,11 +190,16 @@ public sealed class Program
                 throw new InvalidOperationException($"Failed to get OneNote Section content: {onenoteContentResult.LastErrorDescription}");
             }
 
-            var sb = new StringBuilder(fileSummary);
-            sb.AppendLine();
+            var sb = new StringBuilder(fileSummary); 
             sb.AppendLine();
             sb.Append(onenoteContentResult.Result);
             fileSummary = sb.ToString();
+
+            //// Create a link to the OneNote Section
+            //notebookVariables = new ContextVariables(notebookName);
+            //notebookVariables.Set("path", sectionPath);
+            //SKContext oneNoteLinkResult = await sk.RunAsync(notebookVariables, onenote["CreateSectionLinkAsync"]);
+            //oneNoteLink = oneNoteLinkResult.Result;
         }
 
         // Get my email address
@@ -204,10 +210,7 @@ public sealed class Program
         SKContext fileLinkResult = await sk.RunAsync(pathToFile, onedrive["CreateLink"]);
         string fileLink = fileLinkResult.Result;
 
-        // TODO: Create a link to the OneNote Section
-        string oneNoteLink = string.Empty;
-
-        // Send me an email with the summary and a link to the file.
+        // Send me an email with the summary and a link to the file and the OneNote.
         ContextVariables emailMemory = new($"{fileSummary}{Environment.NewLine}{Environment.NewLine}{fileLink}{Environment.NewLine}{Environment.NewLine}{oneNoteLink}");
         emailMemory.Set(EmailSkill.Parameters.Recipients, myEmailAddress);
         emailMemory.Set(EmailSkill.Parameters.Subject, $"Summary of {pathToFile}");

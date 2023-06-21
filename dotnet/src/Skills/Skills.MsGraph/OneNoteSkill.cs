@@ -176,6 +176,6 @@ public class OneNoteSkill
             linkScope = DefaultLinkScope;
         }
 
-        return await this._noteConnector.CreatePageShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
+        return await this._noteConnector.CreateSectionShareLinkAsync(name, path, linkType, linkScope, context.CancellationToken).ConfigureAwait(false);
     }
 }
