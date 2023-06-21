@@ -10,29 +10,8 @@ using Microsoft.SemanticKernel.SkillDefinition;
 
 namespace Microsoft.SemanticKernel.Skills.MsGraph;
 
-//**********************************************************************************************************************
-// EXAMPLE USAGE
-// Option #1: as a standalone C# function
-//
-// OneNoteSkill oneNoteSkill = new(new OneNoteConnector());
-// string filePath = "PATH_TO_DOCX_FILE.docx";
-// string text = await oneNoteSkill.ReadTextAsync(filePath);
-// Console.WriteLine(text);
-//
-//
-// Option #2: with the Semantic Kernel
-//
-// DocumentSkill documentSkill = new(new WordDocumentConnector(), new LocalDriveConnector());
-// string filePath = "PATH_TO_DOCX_FILE.docx";
-// ISemanticKernel kernel = SemanticKernel.Build();
-// var result = await kernel.RunAsync(
-//      filePath,
-//      documentSkill.ReadTextAsync);
-// Console.WriteLine(result);
-//**********************************************************************************************************************
-
 /// <summary>
-/// Skill for interacting with OneNote
+/// Skill for interacting with notes (e.g. OneNote)
 /// </summary>
 public class OneNoteSkill
 {
@@ -80,52 +59,52 @@ public class OneNoteSkill
     }
 
     /// <summary>
-    /// Read all text from a OneNote page, using <see cref="ContextVariables.Input"/> as the name of the notebook
+    /// Read all text from a page in a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Read text from a OneNote page")]
-    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunction("Read text from a notebook page")]
+    [SKFunctionInput(Description = "Name of the notebook to read")]
     [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
-    public async Task<string> GetPageContentAsync(string name, SKContext context)
+    public async Task<string> GetPageContentAsync(string notebookName, SKContext context)
     {
-        this._logger.LogInformation("Reading text from {0} OneNote", name);
+        this._logger.LogInformation("Reading text from {0} OneNote", notebookName);
         if (!context.Variables.Get(Parameters.Path, out string path))
         {
             context.Fail($"Missing variable {Parameters.Path}.");
             return string.Empty;
         }
 
-        Stream s = await this._noteConnector.GetPageContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
+        Stream s = await this._noteConnector.GetPageContentStreamAsync(notebookName, path, context.CancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Read all text from all pages in a OneNote section, using <see cref="ContextVariables.Input"/> as the name of the notebook
+    /// Read all text from all pages in a notebook section, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Read text from all pages in a OneNote section")]
-    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunction("Read text from all pages in a section of a notebook")]
+    [SKFunctionInput(Description = "Name of the notebook to read")]
     [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to section")]
-    public async Task<string> GetSectionContentAsync(string name, SKContext context)
+    public async Task<string> GetSectionContentAsync(string notebookName, SKContext context)
     {
-        this._logger.LogInformation("Reading text from {0} OneNote", name);
+        this._logger.LogInformation("Reading text from {0} OneNote", notebookName);
         if (!context.Variables.Get(Parameters.Path, out string path))
         {
             context.Fail($"Missing variable {Parameters.Path}.");
             return string.Empty;
         }
 
-        Stream s = await this._noteConnector.GetSectionContentStreamAsync(name, path, context.CancellationToken).ConfigureAwait(false);
+        Stream s = await this._noteConnector.GetSectionContentStreamAsync(notebookName, path, context.CancellationToken).ConfigureAwait(false);
 
         using var reader = new StreamReader(s);
         return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Create a sharable link to a page in a OneNote
+    /// Create a sharable link to a page in a notebook, using <see cref="ContextVariables.Input"/> as the name of the notebook
     /// </summary>
-    [SKFunction("Create a sharable link to a page in a OneNote.")]
-    [SKFunctionInput(Description = "Name of the OneNote to read")]
+    [SKFunction("Create a sharable link to a page in a notebook.")]
+    [SKFunctionInput(Description = "Name of the notebook to create the link for")]
     [SKFunctionContextParameter(Name = Parameters.Path, Description = "Path to page")]
     public async Task<string> CreatePageLinkAsync(string name, SKContext context)
     {
