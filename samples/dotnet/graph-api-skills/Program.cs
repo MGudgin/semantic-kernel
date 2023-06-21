@@ -148,6 +148,7 @@ public sealed class Program
         var onenote = sk.ImportSkill(onenoteSkill, "onenote");
 
         string skillParentDirectory = RepoFiles.SampleSkillsPath();
+
         IDictionary<string, ISKFunction> summarizeSkills =
             sk.ImportSemanticSkillFromDirectory(skillParentDirectory, "SummarizeSkill");
 
