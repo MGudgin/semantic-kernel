@@ -107,7 +107,7 @@ public sealed class Program
         CloudDriveSkill oneDriveSkill = new(new OneDriveConnector(graphServiceClient), loggerFactory.CreateLogger<CloudDriveSkill>());
         TaskListSkill todoSkill = new(new MicrosoftToDoConnector(graphServiceClient), loggerFactory.CreateLogger<TaskListSkill>());
         EmailSkill outlookSkill = new(new OutlookMailConnector(graphServiceClient), loggerFactory.CreateLogger<EmailSkill>());
-        OneNoteSkill onenoteSkill = new(new OneNoteConnector(graphServiceClient), loggerFactory.CreateLogger<OneNoteSkill>());
+        NoteSkill onenoteSkill = new(new OneNoteConnector(graphServiceClient), loggerFactory.CreateLogger<NoteSkill>());
 
         // Initialize the Semantic Kernel and and register connections with OpenAI/Azure OpenAI instances.
         KernelBuilder builder = Kernel.Builder

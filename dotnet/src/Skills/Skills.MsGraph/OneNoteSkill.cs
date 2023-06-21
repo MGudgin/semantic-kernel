@@ -13,7 +13,7 @@ namespace Microsoft.SemanticKernel.Skills.MsGraph;
 /// <summary>
 /// Skill for interacting with notes (e.g. OneNote)
 /// </summary>
-public class OneNoteSkill
+public class NoteSkill
 {
     const string DefaultLinkType = "view";
     const string DefaultLinkScope = "anonymous";
@@ -45,17 +45,17 @@ public class OneNoteSkill
     }
 
     private readonly INoteConnector _noteConnector;
-    private readonly ILogger<OneNoteSkill> _logger;
+    private readonly ILogger<NoteSkill> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="OneNoteSkill"/> class.
+    /// Initializes a new instance of the <see cref="NoteSkill"/> class.
     /// </summary>
     /// <param name="noteConnector">Document connector</param>
     /// <param name="logger">Optional logger</param>
-    public OneNoteSkill(INoteConnector noteConnector, ILogger<OneNoteSkill>? logger = null)
+    public NoteSkill(INoteConnector noteConnector, ILogger<NoteSkill>? logger = null)
     {
         this._noteConnector = noteConnector ?? throw new ArgumentNullException(nameof(noteConnector));
-        this._logger = logger ?? new NullLogger<OneNoteSkill>();
+        this._logger = logger ?? new NullLogger<NoteSkill>();
     }
 
     /// <summary>
